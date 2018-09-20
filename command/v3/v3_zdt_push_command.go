@@ -22,7 +22,7 @@ import (
 
 type V3ZeroDowntimeVersionActor interface {
 	ZeroDowntimePollStart(appGUID string, warningsChannel chan<- v3action.Warnings) error
-	CreateDeployment(appGUID string) (v3action.Warnings, error)
+	CreateDeployment(appGUID string) (string, v3action.Warnings, error)
 
 	CloudControllerAPIVersion() string
 	CreateAndUploadBitsPackageByApplicationNameAndSpace(appName string, spaceGUID string, bitsPath string) (v3action.Package, v3action.Warnings, error)
@@ -179,7 +179,6 @@ func (cmd V3ZeroDowntimePushCommand) Execute(args []string) error {
 	if err != nil {
 		return err
 	}
-
 	err = cmd.createDeployment(app.GUID, user.Name)
 	if err != nil {
 		return err
@@ -431,7 +430,7 @@ func (cmd V3ZeroDowntimePushCommand) createDeployment(appGUID string, userName s
 		"CurrentUser":  userName,
 	})
 
-	warnings, err := cmd.ZdtActor.CreateDeployment(appGUID)
+	_, warnings, err := cmd.ZdtActor.CreateDeployment(appGUID)
 	cmd.UI.DisplayWarnings(warnings)
 	if err != nil {
 		return err

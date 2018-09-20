@@ -2,7 +2,6 @@ package ccv3
 
 import (
 	"bytes"
-
 	"encoding/json"
 
 	"code.cloudfoundry.org/cli/api/cloudcontroller"
@@ -12,7 +11,7 @@ import (
 
 type Deployment struct {
 	GUID          string
-	State         string
+	State         constant.DeploymentState
 	Droplet       Droplet
 	CreatedAt     string
 	UpdatedAt     string
@@ -32,9 +31,11 @@ func (d Deployment) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON helps unmarshal a Cloud Controller Deployment response.
 func (d *Deployment) UnmarshalJSON(data []byte) error {
 	var ccDeployment struct {
-		GUID          string        `json:"guid,omitempty"`
-		CreatedAt     string        `json:"created_at,omitempty"`
-		Relationships Relationships `json:"relationships,omitempty"`
+		GUID          string                   `json:"guid,omitempty"`
+		CreatedAt     string                   `json:"created_at,omitempty"`
+		Relationships Relationships            `json:"relationships,omitempty"`
+		State         constant.DeploymentState `json:"state,omitempty"`
+		Droplet       Droplet                  `json:"droplet,omitempty"`
 	}
 	err := cloudcontroller.DecodeJSON(data, &ccDeployment)
 	if err != nil {
@@ -44,18 +45,20 @@ func (d *Deployment) UnmarshalJSON(data []byte) error {
 	d.GUID = ccDeployment.GUID
 	d.CreatedAt = ccDeployment.CreatedAt
 	d.Relationships = ccDeployment.Relationships
+	d.State = ccDeployment.State
+	d.Droplet = ccDeployment.Droplet
 
 	return nil
 }
 
-func (client *Client) CreateApplicationDeployment(appGUID string) (Warnings, error) {
+func (client *Client) CreateApplicationDeployment(appGUID string) (string, Warnings, error) {
 	dep := Deployment{
 		Relationships: Relationships{constant.RelationshipTypeApplication: Relationship{GUID: appGUID}},
 	}
 	bodyBytes, err := json.Marshal(dep)
 
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 	request, err := client.newHTTPRequest(requestOptions{
 		RequestName: internal.PostApplicationDeploymentRequest,
@@ -63,7 +66,7 @@ func (client *Client) CreateApplicationDeployment(appGUID string) (Warnings, err
 	})
 
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 
 	var responseDeployment Deployment
@@ -72,5 +75,24 @@ func (client *Client) CreateApplicationDeployment(appGUID string) (Warnings, err
 	}
 	err = client.connection.Make(request, &response)
 
-	return response.Warnings, err
+	return responseDeployment.GUID, response.Warnings, err
+}
+
+// TODO add method to get deployment given a guid
+func (client *Client) GetDeployment(deploymentGUID string) (Deployment, Warnings, error) {
+	request, err := client.newHTTPRequest(requestOptions{
+		RequestName: internal.GetDeploymentRequest,
+		URIParams:   internal.Params{"deployment_guid": deploymentGUID},
+	})
+	if err != nil {
+		return Deployment{}, nil, err
+	}
+
+	var responseDeployment Deployment
+	response := cloudcontroller.Response{
+		Result: &responseDeployment,
+	}
+	err = client.connection.Make(request, &response)
+
+	return responseDeployment, response.Warnings, err
 }
